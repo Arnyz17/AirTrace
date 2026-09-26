@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-haze-bg text-haze-ink font-body;
+}
+
+.leaflet-container {
+  font-family: 'Inter', sans-serif;
+}
