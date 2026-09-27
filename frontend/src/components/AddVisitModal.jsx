@@ -57,34 +57,37 @@ export default function AddVisitModal({ isOpen, onClose, onVisitAdded, currentDa
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-haze-panel border border-haze-line rounded-xl max-w-md w-full p-6 shadow-xl relative animate-in fade-in zoom-in-95 duration-150">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="font-display text-lg font-semibold">Log a Location Visit</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+      <div className="glass-panel border border-slate-700/80 rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+        <div className="flex justify-between items-center mb-4 border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">📍</span>
+            <h2 className="font-display text-lg font-bold text-slate-100">Log a Location Visit</h2>
+          </div>
           <button
             onClick={onClose}
-            className="text-haze-mute hover:text-haze-ink p-1 rounded-md text-xl"
+            className="text-slate-400 hover:text-slate-100 p-1 rounded-lg text-lg transition"
           >
             ✕
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 text-xs bg-red-500/10 border border-red-500/30 text-red-400 p-2.5 rounded-md">
-            {error}
+          <div className="mb-4 text-xs bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-xl">
+            ⚠️ {error}
           </div>
         )}
 
         {/* Quick Presets */}
         <div className="mb-4">
-          <label className="text-xs text-haze-mute block mb-1.5 font-medium">Quick Presets:</label>
+          <label className="text-xs text-slate-400 block mb-2 font-medium">Quick Location Presets:</label>
           <div className="flex flex-wrap gap-1.5">
             {PRESETS.map((p) => (
               <button
                 key={p.name}
                 type="button"
                 onClick={() => applyPreset(p)}
-                className="text-xs bg-haze-line/40 hover:bg-haze-line px-2.5 py-1 rounded-md transition text-haze-ink"
+                className="text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 px-2.5 py-1.5 rounded-lg transition text-slate-200"
               >
                 {p.name}
               </button>
@@ -92,63 +95,63 @@ export default function AddVisitModal({ isOpen, onClose, onVisitAdded, currentDa
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3 text-sm">
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
           <div>
-            <label className="block text-xs text-haze-mute mb-1 font-medium">Location Name</label>
+            <label className="block text-xs text-slate-400 mb-1 font-medium">Location Name</label>
             <input
               type="text"
               required
-              placeholder="e.g. Science Building"
+              placeholder="e.g. Science Library"
               value={locationName}
               onChange={(e) => setLocationName(e.target.value)}
-              className="w-full bg-haze-bg border border-haze-line rounded-md px-3 py-2 text-haze-ink focus:outline-none focus:border-teal"
+              className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2.5 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500 transition"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-haze-mute mb-1 font-medium">Latitude</label>
+              <label className="block text-xs text-slate-400 mb-1 font-medium">Latitude</label>
               <input
                 type="number"
                 step="any"
                 required
                 value={latitude}
                 onChange={(e) => setLatitude(e.target.value)}
-                className="w-full bg-haze-bg border border-haze-line rounded-md px-3 py-2 text-haze-ink focus:outline-none focus:border-teal"
+                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-emerald-500 transition"
               />
             </div>
             <div>
-              <label className="block text-xs text-haze-mute mb-1 font-medium">Longitude</label>
+              <label className="block text-xs text-slate-400 mb-1 font-medium">Longitude</label>
               <input
                 type="number"
                 step="any"
                 required
                 value={longitude}
                 onChange={(e) => setLongitude(e.target.value)}
-                className="w-full bg-haze-bg border border-haze-line rounded-md px-3 py-2 text-haze-ink focus:outline-none focus:border-teal"
+                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2.5 text-slate-100 focus:outline-none focus:border-emerald-500 transition"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-haze-mute mb-1 font-medium">Start Time</label>
+              <label className="block text-xs text-slate-400 mb-1 font-medium">Start Time</label>
               <input
                 type="datetime-local"
                 required
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="w-full bg-haze-bg border border-haze-line rounded-md px-2.5 py-2 text-haze-ink text-xs focus:outline-none focus:border-teal"
+                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 transition"
               />
             </div>
             <div>
-              <label className="block text-xs text-haze-mute mb-1 font-medium">End Time</label>
+              <label className="block text-xs text-slate-400 mb-1 font-medium">End Time</label>
               <input
                 type="datetime-local"
                 required
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
-                className="w-full bg-haze-bg border border-haze-line rounded-md px-2.5 py-2 text-haze-ink text-xs focus:outline-none focus:border-teal"
+                className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-2.5 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 transition"
               />
             </div>
           </div>
@@ -157,16 +160,16 @@ export default function AddVisitModal({ isOpen, onClose, onVisitAdded, currentDa
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-haze-line/30 hover:bg-haze-line py-2 rounded-md font-medium text-xs transition"
+              className="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 py-2.5 rounded-xl font-medium text-slate-300 text-xs transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 bg-teal hover:bg-teal/90 text-black py-2 rounded-md font-medium text-xs transition disabled:opacity-50"
+              className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-emerald-500/20 disabled:opacity-50"
             >
-              {loading ? 'Saving...' : 'Add Visit & Calculate'}
+              {loading ? 'Processing...' : 'Save & Compute'}
             </button>
           </div>
         </form>

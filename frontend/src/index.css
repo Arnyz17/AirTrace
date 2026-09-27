@@ -3,9 +3,60 @@
 @tailwind utilities;
 
 body {
-  @apply bg-haze-bg text-haze-ink font-body;
+  @apply bg-[#090D16] text-slate-100 font-body selection:bg-emerald-500/30 selection:text-emerald-200;
 }
 
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090D16;
+}
+::-webkit-scrollbar-thumb {
+  background: #1F293D;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: rgba(17, 24, 39, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card {
+  background: rgba(22, 31, 50, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Leaflet Dark Map Tile Customization */
 .leaflet-container {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: #090D16 !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #161F32 !important;
+  color: #F1F5F9 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-popup-tip {
+  background: #161F32 !important;
+}
+
+.leaflet-control-zoom a {
+  background: #161F32 !important;
+  color: #F1F5F9 !important;
+  border-color: #1F293D !important;
 }

@@ -1,21 +1,48 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts'
 import { colorForLabel } from '../data/aqiBands'
 
 export default function ExposureBreakdownChart({ data }) {
+  if (!data || data.length === 0) return null
+
+  const totalHours = data.reduce((sum, item) => sum + (item.hours || 0), 0)
+
   return (
-    <div className="bg-haze-panel border border-haze-line rounded-lg p-5">
-      <p className="text-xs uppercase tracking-wide text-haze-mute mb-3">Hours spent per air quality band</p>
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={data} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-          <CartesianGrid stroke="#D8E0D8" vertical={false} />
-          <XAxis dataKey="band" tick={{ fontSize: 11, fill: '#5B6B60' }} axisLine={false} tickLine={false} interval={0} angle={-10} textAnchor="end" height={50} />
-          <YAxis tick={{ fontSize: 12, fill: '#5B6B60' }} axisLine={false} tickLine={false} />
-          <Tooltip contentStyle={{ borderRadius: 8, borderColor: '#D8E0D8', fontSize: 13 }} />
-          <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
-            {data.map((entry, i) => <Cell key={i} fill={colorForLabel(entry.band)} />)}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-display text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Air Quality Category Time Breakdown
+        </h3>
+        <span className="text-[11px] text-slate-400 font-medium">{Math.round(totalHours * 10) / 10} Total Hours</span>
+      </div>
+
+      <div className="space-y-3">
+        {data.map((item, idx) => {
+          const color = colorForLabel(item.band)
+          const pct = totalHours > 0 ? Math.round((item.hours / totalHours) * 100) : 0
+
+          return (
+            <div key={item.band || idx} className="space-y-1 text-xs">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                  <span className="font-medium text-slate-200">{item.band}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-100">{item.hours}h</span>
+                  <span className="text-slate-400 text-[11px]">({pct}%)</span>
+                </div>
+              </div>
+
+              {/* Progress Bar Container */}
+              <div className="w-full bg-slate-900/80 h-2.5 rounded-full overflow-hidden border border-slate-800">
+                <div
+                  className="h-full rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${pct}%`, backgroundColor: color }}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
