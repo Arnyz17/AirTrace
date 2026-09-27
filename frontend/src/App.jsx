@@ -17,6 +17,7 @@ export default function App() {
   const [day, setDay] = useState(null)
   const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
   const [errorMsg, setErrorMsg] = useState('')
+  const [userLocation, setUserLocation] = useState(null)
   
   const [isAddVisitOpen, setIsAddVisitOpen] = useState(false)
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false)
@@ -29,6 +30,24 @@ export default function App() {
       }
     })
   }, [])
+
+  const handleLocateUser = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.')
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({
+          lat: parseFloat(pos.coords.latitude.toFixed(4)),
+          lng: parseFloat(pos.coords.longitude.toFixed(4)),
+        })
+      },
+      (err) => {
+        alert(`Location detection error: ${err.message}`)
+      }
+    )
+  }
 
   const load = useCallback(async () => {
     setStatus('loading')
@@ -68,17 +87,21 @@ export default function App() {
                 <span className="text-slate-200">{day.exposureFormula}</span>
               </span>
               <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                SQLite Pre-Computed
+                SQLite Pre-Computed Engine
               </span>
             </div>
           )}
 
           {/* Main 2-Column Dashboard Grid */}
           <div className="grid lg:grid-cols-[1.3fr_1fr] gap-6">
-            <MapPanel locations={day.locations} />
+            <MapPanel
+              locations={day.locations}
+              userLocation={userLocation}
+              onLocateUser={handleLocateUser}
+            />
 
             <div className="space-y-6">
-              <SummaryCard summary={day.summary} />
+              <SummaryCard summary={day.summary} locations={day.locations} />
               <AqiTrendChart data={day.trend} />
               <ExposureBreakdownChart data={day.breakdown} />
             </div>
@@ -121,14 +144,14 @@ export default function App() {
                         <tr key={loc.id || idx} className="hover:bg-slate-800/40 transition">
                           <td className="py-3.5 px-3 font-semibold text-slate-100">{loc.name}</td>
                           <td className="py-3.5 px-3 text-slate-400 font-mono text-[11px]">
-                            {loc.lat.toFixed(3)}, {loc.lng.toFixed(3)}
+                            {typeof loc.lat === 'number' ? loc.lat.toFixed(3) : 'N/A'}, {typeof loc.lng === 'number' ? loc.lng.toFixed(3) : 'N/A'}
                           </td>
                           <td className="py-3.5 px-3 text-slate-300">
-                            {new Date(loc.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {loc.endTime ? new Date(loc.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                            {loc.timestamp ? new Date(loc.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'} - {loc.endTime ? new Date(loc.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                           </td>
-                          <td className="py-3.5 px-3 font-medium text-slate-300">{loc.durationMinutes} mins</td>
+                          <td className="py-3.5 px-3 font-medium text-slate-300">{loc.durationMinutes || 0} mins</td>
                           <td className="py-3.5 px-3 font-bold text-sm" style={{ color: band.color }}>
-                            {loc.aqi !== null ? loc.aqi : 'N/A'}
+                            {loc.aqi !== null && loc.aqi !== undefined ? loc.aqi : 'N/A'}
                           </td>
                           <td className="py-3.5 px-3">
                             <span

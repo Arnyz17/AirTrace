@@ -3,10 +3,10 @@ import { submitVisit } from '../api/aqiApi'
 
 const PRESETS = [
   { name: 'University Campus', lat: 40.744, lng: -74.0247 },
-  { name: 'Downtown Cafe', lat: 40.750, lng: -73.991 },
-  { name: 'Central Park', lat: 40.782, lng: -73.965 },
-  { name: 'Financial District', lat: 40.712, lng: -74.005 },
-  { name: 'Fitness Center', lat: 40.730, lng: -73.990 },
+  { name: 'Downtown Center', lat: 40.7127, lng: -74.0059 },
+  { name: 'Central Park', lat: 40.7812, lng: -73.9665 },
+  { name: 'Tech Hub Office', lat: 40.7505, lng: -73.9934 },
+  { name: 'Sports Gym', lat: 40.7300, lng: -73.9900 },
 ]
 
 export default function AddVisitModal({ isOpen, onClose, onVisitAdded, currentDate }) {
@@ -24,12 +24,39 @@ export default function AddVisitModal({ isOpen, onClose, onVisitAdded, currentDa
   const [startTime, setStartTime] = useState(defaultStart)
   const [endTime, setEndTime] = useState(defaultEnd)
   const [loading, setLoading] = useState(false)
+  const [geoLoading, setGeoLoading] = useState(false)
   const [error, setError] = useState('')
 
   const applyPreset = (preset) => {
     setLocationName(preset.name)
     setLatitude(preset.lat)
     setLongitude(preset.lng)
+  }
+
+  const handleUseGPS = () => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser.')
+      return
+    }
+
+    setGeoLoading(true)
+    setError('')
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(parseFloat(pos.coords.latitude.toFixed(4)))
+        setLongitude(parseFloat(pos.coords.longitude.toFixed(4)))
+        if (!locationName) {
+          setLocationName('My Current Location')
+        }
+        setGeoLoading(false)
+      },
+      (err) => {
+        setGeoLoading(false)
+        setError(`GPS location error: ${err.message}`)
+      },
+      { timeout: 10000 }
+    )
   }
 
   const handleSubmit = async (e) => {
@@ -78,9 +105,19 @@ export default function AddVisitModal({ isOpen, onClose, onVisitAdded, currentDa
           </div>
         )}
 
-        {/* Quick Presets */}
-        <div className="mb-4">
-          <label className="text-xs text-slate-400 block mb-2 font-medium">Quick Location Presets:</label>
+        {/* GPS Button & Quick Presets */}
+        <div className="mb-4 space-y-2">
+          <div className="flex justify-between items-center">
+            <label className="text-xs text-slate-400 font-medium">Quick Location Presets:</label>
+            <button
+              type="button"
+              onClick={handleUseGPS}
+              disabled={geoLoading}
+              className="text-xs text-cyan-400 hover:text-cyan-300 font-medium flex items-center gap-1 transition"
+            >
+              <span>🎯</span> {geoLoading ? 'Detecting GPS...' : 'Use My GPS Location'}
+            </button>
+          </div>
           <div className="flex flex-wrap gap-1.5">
             {PRESETS.map((p) => (
               <button

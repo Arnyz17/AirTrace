@@ -2,31 +2,33 @@ import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaf
 import { useEffect } from 'react'
 import { bandFor } from '../data/aqiBands'
 
-// Helper component to auto-center map when locations change
-function ChangeView({ center }) {
+// Helper component to auto-fit map bounds so all locations are visible
+function AutoFitBounds({ locations }) {
   const map = useMap()
   useEffect(() => {
-    if (center) {
-      map.setView(center, map.getZoom())
+    if (locations && locations.length > 0) {
+      const validPoints = locations.filter(l => typeof l.lat === 'number' && typeof l.lng === 'number' && !isNaN(l.lat) && !isNaN(l.lng))
+      if (validPoints.length > 0) {
+        const bounds = validPoints.map(l => [l.lat, l.lng])
+        if (bounds.length === 1) {
+          map.setView(bounds[0], 13)
+        } else {
+          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
+        }
+      }
     }
-  }, [center, map])
+  }, [locations, map])
   return null
 }
 
-export default function MapPanel({ locations }) {
-  if (!locations || locations.length === 0) {
-    return (
-      <div className="glass-panel rounded-2xl p-8 flex flex-col items-center justify-center min-h-[420px] text-center border border-slate-800">
-        <span className="text-4xl mb-3">📍</span>
-        <h3 className="font-display text-lg font-semibold text-slate-200">No Location Visits Tracked</h3>
-        <p className="text-slate-400 text-xs mt-1 max-w-sm">
-          No location history recorded for this date. Click "+ Log Visit" to add a location and calculate exposure.
-        </p>
-      </div>
-    )
-  }
-
-  const center = [locations[0].lat, locations[0].lng]
+export default function MapPanel({ locations, userLocation, onLocateUser }) {
+  const validLocations = (locations || []).filter(l => typeof l.lat === 'number' && typeof l.lng === 'number' && !isNaN(l.lat) && !isNaN(l.lng))
+  
+  const defaultCenter = userLocation
+    ? [userLocation.lat, userLocation.lng]
+    : validLocations.length > 0
+    ? [validLocations[0].lat, validLocations[0].lng]
+    : [20.5937, 78.9629] // India default center fallback
 
   return (
     <div className="glass-panel rounded-2xl overflow-hidden shadow-2xl relative border border-slate-800 h-[460px] flex flex-col">
@@ -35,26 +37,60 @@ export default function MapPanel({ locations }) {
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
           <h2 className="font-display text-sm font-semibold text-slate-200">
-            Interactive Exposure Map ({locations.length} Locations)
+            Exposure Map ({validLocations.length} Locations)
           </h2>
         </div>
-        <span className="text-[11px] text-slate-400 font-medium">CartoDB Dark Matter</span>
+        
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onLocateUser}
+            className="text-[11px] bg-slate-800 hover:bg-slate-700 text-emerald-400 px-2.5 py-1 rounded-lg border border-slate-700 font-medium transition flex items-center gap-1"
+          >
+            <span>🎯</span> Locate Me
+          </button>
+          <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">Esri Dark Canvas (No Key Required)</span>
+        </div>
       </div>
 
       {/* Map Container */}
       <div className="flex-1 w-full relative z-0">
         <MapContainer
-          center={center}
+          center={defaultCenter}
           zoom={12}
           scrollWheelZoom={false}
           style={{ height: '100%', width: '100%' }}
         >
-          <ChangeView center={center} />
+          <AutoFitBounds locations={validLocations} />
+          
+          {/* Esri Dark Gray Canvas Tile Layer — 100% free, 0 API key required! */}
           <TileLayer
-            attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
           />
-          {locations.map((loc, idx) => {
+
+          {/* User Current Location Marker if available */}
+          {userLocation && (
+            <CircleMarker
+              center={[userLocation.lat, userLocation.lng]}
+              radius={10}
+              pathOptions={{
+                color: '#06B6D4',
+                fillColor: '#06B6D4',
+                fillOpacity: 0.9,
+                weight: 3,
+              }}
+            >
+              <Popup>
+                <div className="p-1 text-xs">
+                  <span className="font-bold text-cyan-400 block mb-0.5">🎯 Your Current Location</span>
+                  <span className="text-slate-300 font-mono">{userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}</span>
+                </div>
+              </Popup>
+            </CircleMarker>
+          )}
+
+          {/* Location Visit Markers */}
+          {validLocations.map((loc, idx) => {
             const band = bandFor(loc.aqi)
             return (
               <CircleMarker
@@ -64,7 +100,7 @@ export default function MapPanel({ locations }) {
                 pathOptions={{
                   color: band.color,
                   fillColor: band.color,
-                  fillOpacity: 0.8,
+                  fillOpacity: 0.85,
                   weight: 3,
                 }}
               >
@@ -84,19 +120,21 @@ export default function MapPanel({ locations }) {
                       <div className="flex justify-between">
                         <span className="text-slate-400">AQI Index:</span>
                         <span className="font-bold text-sm" style={{ color: band.color }}>
-                          {loc.aqi !== null ? loc.aqi : 'N/A'}
+                          {loc.aqi !== null && loc.aqi !== undefined ? loc.aqi : 'N/A'}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-400">Duration:</span>
-                        <span className="font-medium text-slate-200">{loc.durationMinutes} mins</span>
+                        <span className="font-medium text-slate-200">{loc.durationMinutes || 0} mins</span>
                       </div>
-                      <div className="flex justify-between text-[11px] text-slate-400 pt-1">
-                        <span>Time:</span>
-                        <span>
-                          {new Date(loc.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
+                      {loc.timestamp && (
+                        <div className="flex justify-between text-[11px] text-slate-400 pt-1">
+                          <span>Time:</span>
+                          <span>
+                            {new Date(loc.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Popup>

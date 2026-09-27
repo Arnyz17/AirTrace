@@ -29,17 +29,30 @@ function getHealthAdvice(avgAqi) {
   }
 }
 
-export default function SummaryCard({ summary }) {
+export default function SummaryCard({ summary, locations = [] }) {
   if (!summary) return null
-  const { avg, worst, unhealthyHours, totalExposure, totalMinutesTracked, highestExposureLocation } = summary
+
+  const avg = typeof summary.avg === 'number' && !isNaN(summary.avg) ? summary.avg : 0
+  const worst = summary.worst || { name: 'N/A', aqi: 0 }
+  
+  // Calculate tracked minutes safely from summary or location array
+  const trackedMinutes = typeof summary.totalMinutesTracked === 'number' && !isNaN(summary.totalMinutesTracked)
+    ? summary.totalMinutesTracked
+    : locations.reduce((sum, loc) => sum + (loc.durationMinutes || 0), 0)
+
+  const trackedHours = Math.round((trackedMinutes / 60) * 10) / 10
+
+  // Calculate total exposure safely
+  const calculatedExposure = typeof summary.totalExposure === 'number' && summary.totalExposure > 0
+    ? summary.totalExposure
+    : locations.reduce((sum, loc) => sum + ((loc.aqi || avg) * (loc.durationMinutes || 0)), 0)
+
   const band = bandFor(avg)
   const advice = getHealthAdvice(avg)
 
-  const trackedHours = Math.round((totalMinutesTracked / 60) * 10) / 10
-
   return (
     <div className={`glass-panel rounded-2xl p-5 md:p-6 relative overflow-hidden border border-slate-800 transition-all ${advice.glow}`}>
-      {/* Background ambient color tint */}
+      {/* Ambient background tint */}
       <div
         className="absolute top-0 right-0 w-48 h-48 rounded-full blur-3xl opacity-20 pointer-events-none"
         style={{ backgroundColor: band.color }}
@@ -86,26 +99,26 @@ export default function SummaryCard({ summary }) {
         <div className="bg-slate-900/40 p-2.5 rounded-xl border border-slate-800">
           <span className="text-slate-400 block mb-0.5">Highest AQI Spot</span>
           <span className="font-semibold text-slate-200 truncate block">
-            {worst.name} ({worst.aqi})
+            {worst.name || 'N/A'} ({worst.aqi || 0})
           </span>
         </div>
 
         <div className="bg-slate-900/40 p-2.5 rounded-xl border border-slate-800">
           <span className="text-slate-400 block mb-0.5">Highest Exposure Spot</span>
           <span className="font-semibold text-emerald-400 truncate block">
-            {highestExposureLocation || worst.name}
+            {summary.highestExposureLocation || worst.name || 'N/A'}
           </span>
         </div>
 
         <div className="bg-slate-900/40 p-2.5 rounded-xl border border-slate-800">
           <span className="text-slate-400 block mb-0.5">Time Tracked</span>
-          <span className="font-semibold text-slate-200 block">{trackedHours} hrs</span>
+          <span className="font-semibold text-slate-200 block">{trackedHours} hrs ({trackedMinutes} mins)</span>
         </div>
 
         <div className="bg-slate-900/40 p-2.5 rounded-xl border border-slate-800">
           <span className="text-slate-400 block mb-0.5">Total Exposure Index</span>
           <span className="font-semibold text-cyan-400 block">
-            {totalExposure ? totalExposure.toLocaleString() : Math.round(avg * (totalMinutesTracked || 0)).toLocaleString()}
+            {calculatedExposure.toLocaleString()}
           </span>
         </div>
       </div>
