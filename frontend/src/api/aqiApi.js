@@ -1,16 +1,4 @@
-// --- Real API contract (AirTrace backend, confirmed from source) ---------
-// GET /api/exposure/:date  ->
-//   { success, data: {
-//       date, exposureFormula,
-//       summary: { averageAQI, highestAQI, highestAQILocation,
-//                  highestExposureLocation, totalMinutesTracked,
-//                  numberOfLocations, categoryBreakdown: { label: minutes },
-//                  locationBreakdown, exposureRecords },
-//       locations: [{ id, locationName, latitude, longitude, startTime,
-//                     endTime, durationMinutes, date, aqi, aqiCategory }]
-//   } }
-// Errors -> { success: false, error: { code, message, status } }
-// ---------------------------------------------------------------------------
+// --- AirTrace Backend API Contract & Integration ────────────────────────────
 
 import {
   mockLocations,
@@ -19,85 +7,147 @@ import {
   computeSummary as mockComputeSummary,
 } from '../data/mockData'
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL // e.g. http://localhost:3001/api
-const USE_MOCK = !BASE_URL
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 async function getJson(path) {
   const res = await fetch(`${BASE_URL}${path}`)
   const json = await res.json()
   if (!res.ok || json.success === false) {
-    // Surface the backend's own message (it's already human-readable).
-    throw new Error(json?.error?.message || `Request failed (${res.status})`)
+    throw new Error(json?.error?.message || json?.message || `Request failed (${res.status})`)
   }
   return json.data
 }
 
-// --- Normalizers: backend shape -> the shape our components expect --------
+async function postJson(path, body) {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const json = await res.json()
+  if (!res.ok || json.success === false) {
+    throw new Error(json?.error?.message || json?.message || `Failed to submit (${res.status})`)
+  }
+  return json.data
+}
 
-function normalizeLocations(rawLocations) {
+// --- Normalizers: backend shape -> component expectation ────────────────────
+
+function normalizeLocations(rawLocations = []) {
   return rawLocations.map(v => ({
     id: v.id,
     name: v.locationName,
     lat: v.latitude,
     lng: v.longitude,
     aqi: v.aqi,
+    aqiCategory: v.aqiCategory,
     timestamp: v.startTime,
+    endTime: v.endTime,
+    durationMinutes: v.durationMinutes,
   }))
 }
 
-function normalizeTrend(rawLocations) {
-  // No dedicated trend endpoint; derive it from the chronological visit list
-  // that /exposure/:date already returns.
+function normalizeTrend(rawLocations = []) {
   return [...rawLocations]
     .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
     .map(v => ({
       time: new Date(v.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
       aqi: v.aqi,
+      locationName: v.locationName,
     }))
 }
 
-function normalizeBreakdown(categoryBreakdown) {
-  // { "Good": 240, "Moderate": 90, ... } (minutes) -> [{ band, hours }]
-  return Object.entries(categoryBreakdown || {}).map(([band, minutes]) => ({
+function normalizeBreakdown(categoryBreakdown = {}) {
+  return Object.entries(categoryBreakdown).map(([band, minutes]) => ({
     band,
     hours: Math.round((minutes / 60) * 10) / 10,
+    minutes,
   }))
 }
 
-function normalizeSummary(summary) {
+function normalizeSummary(summary = {}) {
   const unhealthyMinutes = Object.entries(summary.categoryBreakdown || {})
     .filter(([label]) => label !== 'Good' && label !== 'Moderate')
     .reduce((sum, [, minutes]) => sum + minutes, 0)
 
   return {
-    avg: summary.averageAQI,
-    worst: { name: summary.highestAQILocation, aqi: summary.highestAQI },
+    avg: summary.averageAQI || 0,
+    worst: {
+      name: summary.highestAQILocation || 'N/A',
+      aqi: summary.highestAQI || 0,
+    },
+    highestExposureLocation: summary.highestExposureLocation || 'N/A',
     unhealthyHours: Math.round((unhealthyMinutes / 60) * 10) / 10,
+    totalExposure: summary.totalExposure || 0,
+    totalMinutesTracked: summary.totalMinutesTracked || 0,
+    numberOfLocations: summary.numberOfLocations || 0,
   }
 }
 
-// --- Public API used by App.jsx --------------------------------------------
+// --- Public API ─────────────────────────────────────────────────────────────
 
 /**
  * Single call that returns everything the dashboard needs for one date:
- * { locations, trend, breakdown, summary } — all already normalized.
+ * { locations, trend, breakdown, summary, date, exposureFormula }
  */
 export async function fetchExposureDay(date) {
-  if (USE_MOCK) {
-    await new Promise(r => setTimeout(r, 400)) // visible loading state in dev
+  try {
+    const data = await getJson(`/exposure/${date}`)
+    return {
+      locations: normalizeLocations(data.locations || []),
+      trend: normalizeTrend(data.locations || []),
+      breakdown: normalizeBreakdown(data.summary?.categoryBreakdown || {}),
+      summary: normalizeSummary(data.summary || {}),
+      rawSummary: data.summary,
+      date: data.date,
+      exposureFormula: data.exposureFormula,
+      isMockFallback: false,
+    }
+  } catch (err) {
+    console.warn(`[AirTrace] Backend fetch for ${date} failed, using mock fallback:`, err.message)
+    // Fallback to local mock data if backend server is unreachable
     return {
       locations: mockLocations,
       trend: mockTrend,
       breakdown: mockExposureBreakdown,
       summary: mockComputeSummary(mockLocations),
+      date: date,
+      isMockFallback: true,
+      fallbackError: err.message,
     }
   }
+}
 
-  const data = await getJson(`/exposure/${date}`)
-  return {
-    locations: normalizeLocations(data.locations),
-    trend: normalizeTrend(data.locations),
-    breakdown: normalizeBreakdown(data.summary.categoryBreakdown),
-    summary: normalizeSummary(data.summary),
+/**
+ * Fetch available historical dates and summaries from the backend.
+ */
+export async function fetchHistory() {
+  try {
+    const data = await getJson('/exposure/history')
+    return data
+  } catch (err) {
+    console.warn('[AirTrace] History fetch failed:', err.message)
+    return { availableDates: ['2026-09-24', '2026-09-25', '2026-09-26'], summaries: [] }
   }
+}
+
+/**
+ * Fetch cross-date aggregate analytics overview.
+ */
+export async function fetchOverviewAnalytics() {
+  try {
+    const data = await getJson('/analytics/overview')
+    return data
+  } catch (err) {
+    console.warn('[AirTrace] Overview analytics fetch failed:', err.message)
+    return null
+  }
+}
+
+/**
+ * Submit a new location visit to the backend (POST /api/visits).
+ */
+export async function submitVisit(visitPayload) {
+  const data = await postJson('/visits', visitPayload)
+  return data
 }
