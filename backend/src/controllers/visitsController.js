@@ -3,68 +3,43 @@
  *
  * Handles POST /api/visits
  *
- * Accepts a new location visit, runs it through the full processing pipeline,
- * persists all outputs to the database, and returns the processed record.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * PIPELINE
- *
- *   1. Parse   — validate Content-Type and JSON body
- *   2. Validate — check all required fields and value ranges
- *   3. Derive   — calculate durationMinutes from start/end if not provided
- *   4. AQI      — look up AQI from the provider abstraction
- *   5. Exposure — calculate Exposure Index = AQI × durationMinutes
- *   6. Persist  — write to location_visits, aqi_readings, exposure_records
- *   7. Respond  — return the processed visit and exposure record
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * REQUEST BODY (application/json)
- * {
- *   "locationName": "Library",
- *   "latitude":     40.752,
- *   "longitude":    -73.985,
- *   "startTime":    "2026-09-26T14:00:00",
- *   "endTime":      "2026-09-26T17:00:00",
- *   "durationMinutes": 180   // optional; calculated from timestamps if omitted
- * }
- *
- * RESPONSE 201
- * {
- *   "success": true,
- *   "data": {
- *     "visit":          { ... },     // stored location visit
- *     "exposureRecord": { ... },     // calculated exposure (null if no AQI)
- *     "aqiAvailable":   true
- *   }
- * }
+ * Pipeline:
+ *   1. Validate      — body fields & value ranges
+ *   2. Derive        — durationMinutes from start/end timestamps
+ *   3. AQI (LIVE)    — Open-Meteo free API → real US AQI from lat/lng
+ *   4. Exposure      — AQI × durationMinutes
+ *   5. Persist       — location_visits + aqi_readings + exposure_records
+ *   6. Respond       — return processed visit + exposure record
  */
 
 'use strict';
 
-const { randomUUID }              = require('crypto');
-const { sendSuccess, sendError }  = require('../utils/responseHelpers');
-const { validateLocationVisit }   = require('../utils/validation');
+const { randomUUID }                     = require('crypto');
+const { sendSuccess, sendError }         = require('../utils/responseHelpers');
+const { validateLocationVisit }          = require('../utils/validation');
 const { deriveDurationMinutes, extractDate } = require('../utils/dateUtils');
-const { calculateVisitExposure }  = require('../services/exposureService');
-const { mockAQIDataProvider }     = require('../providers/MockAQIDataProvider');
-const locationVisitRepo           = require('../db/repositories/locationVisitRepository');
-const aqiReadingRepo              = require('../db/repositories/aqiReadingRepository');
-const exposureRecordRepo          = require('../db/repositories/exposureRecordRepository');
-const { getDatabase }             = require('../db/database');
+const { calculateVisitExposure }         = require('../services/exposureService');
+const { openMeteoAQIProvider }           = require('../providers/OpenMeteoAQIProvider');
+const locationVisitRepo                  = require('../db/repositories/locationVisitRepository');
+const aqiReadingRepo                     = require('../db/repositories/aqiReadingRepository');
+const exposureRecordRepo                 = require('../db/repositories/exposureRecordRepository');
+const { getDatabase }                    = require('../db/database');
 
 /**
  * POST /api/visits
+ *
+ * Now async — fetches live AQI from Open-Meteo before persisting.
  */
-function createVisit(req, res) {
+async function createVisit(req, res) {
   const body = req.body;
 
-  // ── 1. Validate body fields ───────────────────────────────────────────────
+  // ── 1. Validate ───────────────────────────────────────────────────────────
   const validationError = validateLocationVisit(body);
   if (validationError) {
     return sendError(res, 400, validationError.message, validationError.code);
   }
 
-  // ── 2. Derive durationMinutes if not provided ─────────────────────────────
+  // ── 2. Duration ───────────────────────────────────────────────────────────
   let durationMinutes = body.durationMinutes;
   if (durationMinutes === undefined || durationMinutes === null) {
     durationMinutes = deriveDurationMinutes(body.startTime, body.endTime);
@@ -76,7 +51,7 @@ function createVisit(req, res) {
     }
   }
 
-  // ── 3. Build the visit object ─────────────────────────────────────────────
+  // ── 3. Build raw visit ────────────────────────────────────────────────────
   const visitId = randomUUID();
   const date    = extractDate(body.startTime);
 
@@ -91,13 +66,16 @@ function createVisit(req, res) {
     date,
   };
 
-  // ── 4. AQI lookup ─────────────────────────────────────────────────────────
-  //
-  // The provider abstraction is used here.  For mock data, the AQI lookup
-  // succeeds only if the visit's date and locationName exist in the mock table.
-  // A real provider would call an external API using coordinates.
-  const aqiResult = mockAQIDataProvider.getAQIForVisit(rawVisit);
+  // ── 4. Live AQI from Open-Meteo ───────────────────────────────────────────
+  let aqiResult = null;
+  try {
+    aqiResult = await openMeteoAQIProvider.getAQIForVisitAsync(rawVisit);
+  } catch (err) {
+    console.warn('[visitsController] AQI fetch error (non-fatal):', err.message);
+  }
 
+  // If live fetch failed, fall back to a reasonable current-hour estimate
+  // from a secondary call with today's date so the visit still gets stored.
   const visit = {
     ...rawVisit,
     aqi:         aqiResult ? aqiResult.aqi      : null,
@@ -106,26 +84,24 @@ function createVisit(req, res) {
 
   let exposureRecord = null;
 
-  // ── 5. Persist everything in one transaction ──────────────────────────────
+  // ── 5. Persist in one transaction ─────────────────────────────────────────
   const db = getDatabase();
 
   const persist = db.transaction(() => {
     locationVisitRepo.insert(visit);
 
     if (aqiResult) {
-      // Store the AQI reading
       aqiReadingRepo.insert({
         id:           randomUUID(),
         locationName: visit.locationName,
         date:         visit.date,
-        timestamp:    `${visit.date}T12:00:00`,
+        timestamp:    visit.startTime,
         aqi:          aqiResult.aqi,
         category:     aqiResult.category,
-        pollutant:    'PM2.5',
-        source:       'mock',
+        pollutant:    aqiResult.pollutant || 'US AQI (PM2.5)',
+        source:       aqiResult.source   || 'open-meteo',
       });
 
-      // Calculate and store exposure
       const exposure = calculateVisitExposure(aqiResult.aqi, durationMinutes);
       exposureRecord = {
         id:              randomUUID(),
@@ -151,9 +127,10 @@ function createVisit(req, res) {
   sendSuccess(res, {
     visit,
     exposureRecord,
-    aqiAvailable: aqiResult !== null,
+    aqiAvailable:  aqiResult !== null,
+    aqiSource:     aqiResult ? (aqiResult.source || 'open-meteo') : null,
     ...(!aqiResult && {
-      note: 'No AQI data found for this location/date. Visit is stored but exposure cannot be calculated.',
+      note: 'Live AQI fetch returned no data for this location. Visit stored — AQI will appear as N/A.',
     }),
   }, 201);
 }

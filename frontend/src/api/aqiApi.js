@@ -1,12 +1,5 @@
 // --- AirTrace Backend API Contract & Integration ────────────────────────────
 
-import {
-  mockLocations,
-  mockTrend,
-  mockExposureBreakdown,
-  computeSummary as mockComputeSummary,
-} from '../data/mockData'
-
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
 async function getJson(path) {
@@ -104,19 +97,20 @@ export async function fetchExposureDay(date) {
       isMockFallback: false,
     }
   } catch (err) {
-    console.warn(`[AirTrace] Backend fetch for ${date} failed, using mock fallback:`, err.message)
-    // Fallback to local mock data if backend server is unreachable
+    console.warn(`[AirTrace] Backend fetch for ${date} failed:`, err.message)
+    // Return empty — no fake data
     return {
-      locations: mockLocations,
-      trend: mockTrend,
-      breakdown: mockExposureBreakdown,
-      summary: mockComputeSummary(mockLocations),
-      date: date,
+      locations: [],
+      trend: [],
+      breakdown: [],
+      summary: { avg: 0, worst: { name: 'N/A', aqi: 0 }, unhealthyHours: 0, totalExposure: 0, totalMinutesTracked: 0, numberOfLocations: 0 },
+      date,
       isMockFallback: true,
       fallbackError: err.message,
     }
   }
 }
+
 
 /**
  * Fetch available historical dates and summaries from the backend.
@@ -146,8 +140,26 @@ export async function fetchOverviewAnalytics() {
 
 /**
  * Submit a new location visit to the backend (POST /api/visits).
+ * AQI is now fetched live from Open-Meteo in the backend.
  */
 export async function submitVisit(visitPayload) {
   const data = await postJson('/visits', visitPayload)
   return data
 }
+
+/**
+ * Fetch real-time AQI for any lat/lng from Open-Meteo via the backend proxy.
+ * Returns { aqi, pm25, category, timestamp, source } or null on failure.
+ */
+export async function fetchLiveAQI(lat, lng) {
+  try {
+    const res = await fetch(`${BASE_URL}/aqi/live?lat=${lat}&lng=${lng}`)
+    const json = await res.json()
+    if (json.success && json.data) return json.data
+    return null
+  } catch (err) {
+    console.warn('[AirTrace] Live AQI fetch failed:', err.message)
+    return null
+  }
+}
+
